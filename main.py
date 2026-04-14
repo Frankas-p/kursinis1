@@ -10,7 +10,6 @@ if __name__ == "__main__":
     main()
     from pathlib import Path
 
-
 class Config:
     WINDOW_WIDTH = 600
     WINDOW_HEIGHT = 600
@@ -20,6 +19,9 @@ class Config:
     FPS = 10
 
     BACKGROUND_COLOR = (20, 20, 20)
+    LIGHT_COLOR = (50, 50, 50)
+    DARK_COLOR = (30, 30, 30)
+
     SNAKE_COLOR = (0, 200, 0)
     FOOD_COLOR = (220, 40, 40)
     TEXT_COLOR = (255, 255, 255)
