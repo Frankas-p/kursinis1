@@ -1,5 +1,6 @@
 import pygame
 import random
+import sys
 from pathlib import Path
 from typing import Tuple
 
@@ -256,7 +257,7 @@ class SnakeGame:
             self.clock.tick(Config.FPS)
 
         pygame.quit()
-
+        sys.exit()
 
 def main() -> None:
     game = SnakeGame()
