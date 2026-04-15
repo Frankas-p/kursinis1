@@ -200,14 +200,17 @@ class SnakeGame:
                     self.restart()
 
                 elif not self.game_over:
-                    if event.key == pygame.K_UP:
-                        self.snake.set_direction((0, -1))
-                    elif event.key == pygame.K_DOWN:
-                        self.snake.set_direction((0, 1))
-                    elif event.key == pygame.K_LEFT:
-                        self.snake.set_direction((-1, 0))
-                    elif event.key == pygame.K_RIGHT:
-                        self.snake.set_direction((1, 0))
+                  if event.key in (pygame.K_UP, pygame.K_w):
+                     self.snake.set_direction((0, -1))
+
+                  elif event.key in (pygame.K_DOWN, pygame.K_s):
+                     self.snake.set_direction((0, 1))
+
+                  elif event.key in (pygame.K_LEFT, pygame.K_a):
+                     self.snake.set_direction((-1, 0))
+
+                  elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                      self.snake.set_direction((1, 0))
 
     def update(self) -> None:
         if self.game_over:
