@@ -87,6 +87,8 @@ class FoodFactory:
 
 
 class Snake(GameObject):
+
+
     def __init__(self, position: Position) -> None:
         super().__init__(position)
         self._body: List[Position] = [position]
@@ -142,4 +144,57 @@ class Snake(GameObject):
                 Config.CELL_SIZE,
                 Config.CELL_SIZE,
             )
-            pygame.draw.rect(surface, Config.SNAKE_COLOR, rect)
+            pygame.draw.rect(surface, Config.SNAKE_COLOR, rect)           
+    import pygame
+
+from config import Config
+
+
+class HighScoreManager:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._high_score = 0
+            cls._instance._load_high_score()
+        return cls._instance
+
+    def _load_high_score(self) -> None:
+        if Config.HIGH_SCORE_FILE.exists():
+            try:
+                value = Config.HIGH_SCORE_FILE.read_text(encoding="utf-8").strip()
+                self._high_score = int(value) if value else 0
+            except (ValueError, OSError):
+                self._high_score = 0
+        else:
+            self._high_score = 0
+            self.save_high_score()
+
+    @property
+    def high_score(self) -> int:
+        return self._high_score
+
+    def update_if_better(self, score: int) -> None:
+        if score > self._high_score:
+            self._high_score = score
+            self.save_high_score()
+
+    def save_high_score(self) -> None:
+        Config.HIGH_SCORE_FILE.write_text(str(self._high_score), encoding="utf-8")
+
+
+class ScoreBoard:
+    def __init__(self, font: pygame.font.Font, high_score_manager: HighScoreManager) -> None:
+        self._font = font
+        self._high_score_manager = high_score_manager
+
+    def draw(self, surface: pygame.Surface, score: int) -> None:
+        score_text = self._font.render(f"Score: {score}", True, Config.TEXT_COLOR)
+        high_text = self._font.render(
+            f"Best: {self._high_score_manager.high_score}",
+            True,
+            Config.TEXT_COLOR,
+        )
+        surface.blit(score_text, (10, 10))
+        surface.blit(high_text, (10, 40))
