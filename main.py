@@ -23,7 +23,7 @@ class Config:
     FOOD_COLOR = (220, 40, 40)
     FOOD_HIGHLIGHT_COLOR = (255, 120, 120)
 
-    TEXT_COLOR = (0, 66, 255)
+    TEXT_COLOR = (255, 255, 0)
     GAME_OVER_COLOR = (141, 0, 0)
 
     HIGH_SCORE_FILE = Path("highscore.txt")
@@ -139,7 +139,7 @@ class SnakeGame:
         pygame.display.set_caption("Snake")
 
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("arial", 28)
+        self.font = pygame.font.SysFont("arial", 28, bold=True)
 
         self.high_score_manager = HighScoreManager()
 
@@ -183,9 +183,18 @@ class SnakeGame:
                 pygame.draw.rect(self.screen, color, rect)
 
     def draw_text_center(self, text: str, y: int, color: tuple[int, int, int]) -> None:
-        rendered = self.font.render(text, True, color)
-        rect = rendered.get_rect(center=(Config.WINDOW_WIDTH // 2, y))
-        self.screen.blit(rendered, rect)
+        outline_color = (0, 0, 0)
+
+        base = self.font.render(text, True, color)
+        outline = self.font.render(text, True, outline_color)
+
+        rect = base.get_rect(center=(Config.WINDOW_WIDTH // 2, y))
+
+        for dx in [-2, 2]:
+             for dy in [-2, 2]:
+                 self.screen.blit(outline, (rect.x + dx, rect.y + dy))
+
+             self.screen.blit(base, rect)
 
     def handle_events(self) -> None:
         for event in pygame.event.get():
