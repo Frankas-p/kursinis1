@@ -12,15 +12,18 @@ class Config:
     CELL_SIZE = 20
     GRID_WIDTH = WINDOW_WIDTH // CELL_SIZE
     GRID_HEIGHT = WINDOW_HEIGHT // CELL_SIZE
-    FPS = 8
+    FPS = 10
 
     LIGHT_COLOR = (50, 50, 50)
     DARK_COLOR = (30, 30, 30)
 
     SNAKE_COLOR = (0, 200, 0)
+    SNAKE_HEAD_COLOR = (0, 141, 0)
     FOOD_COLOR = (220, 40, 40)
-    TEXT_COLOR = (255, 255, 255)
-    GAME_OVER_COLOR = (255, 210, 0)
+    FOOD_HIGHLIGHT_COLOR = (255, 120, 120)
+
+    TEXT_COLOR = (0, 66, 255)
+    GAME_OVER_COLOR = (141, 0, 0)
 
     HIGH_SCORE_FILE = Path("highscore.txt")
 
@@ -85,14 +88,27 @@ class Snake:
         return not (0 <= x < Config.GRID_WIDTH and 0 <= y < Config.GRID_HEIGHT)
 
     def draw(self, screen: pygame.Surface) -> None:
-        for segment in self.body:
+        for i, segment in enumerate(self.body):
             rect = pygame.Rect(
                 segment[0] * Config.CELL_SIZE,
                 segment[1] * Config.CELL_SIZE,
                 Config.CELL_SIZE,
                 Config.CELL_SIZE,
             )
-            pygame.draw.rect(screen, Config.SNAKE_COLOR, rect)
+
+            if i == 0:
+                color = Config.SNAKE_HEAD_COLOR
+                radius = 10
+            else:
+                color = Config.SNAKE_COLOR
+                radius = 8
+
+            pygame.draw.rect(
+                screen,
+                color,
+                rect,
+                border_radius=radius
+            )
 
 
 class Food:
@@ -100,13 +116,19 @@ class Food:
         self.position = position
 
     def draw(self, screen: pygame.Surface) -> None:
-        rect = pygame.Rect(
-            self.position[0] * Config.CELL_SIZE,
-            self.position[1] * Config.CELL_SIZE,
-            Config.CELL_SIZE,
-            Config.CELL_SIZE,
+        center = (
+            self.position[0] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
+            self.position[1] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
         )
-        pygame.draw.rect(screen, Config.FOOD_COLOR, rect)
+        radius = Config.CELL_SIZE // 2 - 2
+
+        pygame.draw.circle(screen, Config.FOOD_COLOR, center, radius)
+        pygame.draw.circle(
+            screen,
+            Config.FOOD_HIGHLIGHT_COLOR,
+            (center[0] - 3, center[1] - 3),
+            radius // 3,
+        )
 
 
 class SnakeGame:
