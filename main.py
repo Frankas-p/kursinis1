@@ -1,8 +1,10 @@
-import pygame
 import random
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
+
+import pygame
 
 Position = Tuple[int, int]
 
@@ -13,13 +15,14 @@ class Config:
     CELL_SIZE = 20
     GRID_WIDTH = WINDOW_WIDTH // CELL_SIZE
     GRID_HEIGHT = WINDOW_HEIGHT // CELL_SIZE
-    FPS = 10
+    FPS = 8
 
     LIGHT_COLOR = (50, 50, 50)
     DARK_COLOR = (30, 30, 30)
 
     SNAKE_COLOR = (0, 200, 0)
     SNAKE_HEAD_COLOR = (0, 141, 0)
+
     FOOD_COLOR = (220, 40, 40)
     FOOD_HIGHLIGHT_COLOR = (255, 120, 120)
 
@@ -30,96 +33,65 @@ class Config:
 
 
 class HighScoreManager:
-    def __init__(self) -> None:
-        self.high_score = self.load_high_score()
+   
 
-    def load_high_score(self) -> int:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(HighScoreManager, cls).__new__(cls)
+            cls._instance._high_score = 0
+            cls._instance._load_high_score()
+        return cls._instance
+
+    def _load_high_score(self) -> None:
         if Config.HIGH_SCORE_FILE.exists():
             try:
                 text = Config.HIGH_SCORE_FILE.read_text(encoding="utf-8").strip()
-                return int(text) if text else 0
+                self._high_score = int(text) if text else 0
             except (ValueError, OSError):
-                return 0
-        return 0
-
-    def save_high_score(self) -> None:
-        Config.HIGH_SCORE_FILE.write_text(str(self.high_score), encoding="utf-8")
-
-    def update_if_better(self, score: int) -> None:
-        if score > self.high_score:
-            self.high_score = score
+                self._high_score = 0
+        else:
+            self._high_score = 0
             self.save_high_score()
 
+    @property
+    def high_score(self) -> int:
+        return self._high_score
 
-class Snake:
+    def update_if_better(self, score: int) -> None:
+        if score > self._high_score:
+            self._high_score = score
+            self.save_high_score()
+
+    def save_high_score(self) -> None:
+        Config.HIGH_SCORE_FILE.write_text(str(self._high_score), encoding="utf-8")
+
+
+class GameObject(ABC):
+   
+
     def __init__(self, position: Position) -> None:
-        self.body = [position]
-        self.direction = (1, 0)
-        self.grow_pending = 0
+        self._position = position
 
     @property
-    def head(self) -> Position:
-        return self.body[0]
+    def position(self) -> Position:
+        return self._position
 
-    def set_direction(self, new_direction: Position) -> None:
-        opposite = (-self.direction[0], -self.direction[1])
-        if new_direction != opposite:
-            self.direction = new_direction
+    @position.setter
+    def position(self, new_position: Position) -> None:
+        self._position = new_position
 
-    def move(self) -> None:
-        x, y = self.head
-        dx, dy = self.direction
-        new_head = (x + dx, y + dy)
-
-        self.body.insert(0, new_head)
-
-        if self.grow_pending > 0:
-            self.grow_pending -= 1
-        else:
-            self.body.pop()
-
-    def grow(self) -> None:
-        self.grow_pending += 1
-
-    def collides_with_self(self) -> bool:
-        return self.head in self.body[1:]
-
-    def collides_with_wall(self) -> bool:
-        x, y = self.head
-        return not (0 <= x < Config.GRID_WIDTH and 0 <= y < Config.GRID_HEIGHT)
-
+    @abstractmethod
     def draw(self, screen: pygame.Surface) -> None:
-        for i, segment in enumerate(self.body):
-            rect = pygame.Rect(
-                segment[0] * Config.CELL_SIZE,
-                segment[1] * Config.CELL_SIZE,
-                Config.CELL_SIZE,
-                Config.CELL_SIZE,
-            )
-
-            if i == 0:
-                color = Config.SNAKE_HEAD_COLOR
-                radius = 10
-            else:
-                color = Config.SNAKE_COLOR
-                radius = 8
-
-            pygame.draw.rect(
-                screen,
-                color,
-                rect,
-                border_radius=radius
-            )
+        pass
 
 
-class Food:
-    def __init__(self, position: Position) -> None:
-        self.position = position
-
+class Food(GameObject):
     def draw(self, screen: pygame.Surface) -> None:
         center = (
-            self.position[0] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
-            self.position[1] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
+            self._position[0] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
+            self._position[1] * Config.CELL_SIZE + Config.CELL_SIZE // 2,
         )
         radius = Config.CELL_SIZE // 2 - 2
 
@@ -132,40 +104,137 @@ class Food:
         )
 
 
-class SnakeGame:
-    def __init__(self) -> None:
-        pygame.init()
-        self.screen = pygame.display.set_mode((Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT))
-        pygame.display.set_caption("Snake")
+class Snake(GameObject):
+   
 
-        self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("arial", 28, bold=True)
+    def __init__(self, position: Position) -> None:
+        super().__init__(position)
+        self._body: List[Position] = [position]
+        self._direction: Position = (1, 0)
+        self._grow_pending = 0
 
-        self.high_score_manager = HighScoreManager()
+    @property
+    def body(self) -> List[Position]:
+        return list(self._body)
 
-        self.running = True
-        self.game_over = False
-        self.score = 0
+    @property
+    def head(self) -> Position:
+        return self._body[0]
 
-        self.snake = Snake((10, 10))
-        self.food = self.create_food()
+    @property
+    def direction(self) -> Position:
+        return self._direction
 
-    def create_food(self) -> Food:
+    def set_direction(self, new_direction: Position) -> None:
+        opposite = (-self._direction[0], -self._direction[1])
+        if new_direction != opposite:
+            self._direction = new_direction
+
+    def move(self) -> None:
+        x, y = self.head
+        dx, dy = self._direction
+        new_head = (x + dx, y + dy)
+
+        self._body.insert(0, new_head)
+
+        if self._grow_pending > 0:
+            self._grow_pending -= 1
+        else:
+            self._body.pop()
+
+        self._position = self.head
+
+    def grow(self) -> None:
+        self._grow_pending += 1
+
+    def collides_with_self(self) -> bool:
+        return self.head in self._body[1:]
+
+    def collides_with_wall(self) -> bool:
+        x, y = self.head
+        return not (0 <= x < Config.GRID_WIDTH and 0 <= y < Config.GRID_HEIGHT)
+
+    def draw(self, screen: pygame.Surface) -> None:
+        for index, segment in enumerate(self._body):
+            rect = pygame.Rect(
+                segment[0] * Config.CELL_SIZE,
+                segment[1] * Config.CELL_SIZE,
+                Config.CELL_SIZE,
+                Config.CELL_SIZE,
+            )
+
+            if index == 0:
+                color = Config.SNAKE_HEAD_COLOR
+                radius = 10
+            else:
+                color = Config.SNAKE_COLOR
+                radius = 8
+
+            pygame.draw.rect(screen, color, rect, border_radius=radius)
+
+
+class FoodFactory:
+   
+
+    @staticmethod
+    def create_food(snake_positions: List[Position]) -> Food:
         while True:
             position = (
                 random.randint(0, Config.GRID_WIDTH - 1),
                 random.randint(0, Config.GRID_HEIGHT - 1),
             )
-            if position not in self.snake.body:
+            if position not in snake_positions:
                 return Food(position)
 
-    def restart(self) -> None:
-        self.score = 0
-        self.game_over = False
-        self.snake = Snake((10, 10))
-        self.food = self.create_food()
 
-    def draw_grid(self) -> None:
+class ScoreBoard:
+   
+    def __init__(self, font: pygame.font.Font, high_score_manager: HighScoreManager) -> None:
+        self._font = font
+        self._high_score_manager = high_score_manager
+
+    def draw(self, screen: pygame.Surface, score: int) -> None:
+        score_text = self._font.render(f"Score: {score}", True, Config.TEXT_COLOR)
+        high_score_text = self._font.render(
+            f"Best: {self._high_score_manager.high_score}",
+            True,
+            Config.TEXT_COLOR,
+        )
+        screen.blit(score_text, (10, 10))
+        screen.blit(high_score_text, (10, 40))
+
+
+class SnakeGame:
+    
+
+    def __init__(self) -> None:
+        pygame.init()
+        self._screen = pygame.display.set_mode((Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT))
+        pygame.display.set_caption("Snake")
+        self._clock = pygame.time.Clock()
+        self._font = pygame.font.SysFont("arial", 28, bold=True)
+
+        self._high_score_manager = HighScoreManager()
+        self._scoreboard = ScoreBoard(self._font, self._high_score_manager)
+
+        self._running = True
+        self._game_over = False
+        self._score = 0
+
+        self._snake = Snake((10, 10))
+        self._food = FoodFactory.create_food(self._snake.body)
+
+    @property
+    def score(self) -> int:
+        return self._score
+
+    def restart(self) -> None:
+        self._score = 0
+        self._game_over = False
+        self._snake = Snake((10, 10))
+        self._food = FoodFactory.create_food(self._snake.body)
+
+    def _draw_grid(self) -> None:
         for x in range(Config.GRID_WIDTH):
             for y in range(Config.GRID_HEIGHT):
                 rect = pygame.Rect(
@@ -174,102 +243,103 @@ class SnakeGame:
                     Config.CELL_SIZE,
                     Config.CELL_SIZE,
                 )
+                color = Config.LIGHT_COLOR if (x + y) % 2 == 0 else Config.DARK_COLOR
+                pygame.draw.rect(self._screen, color, rect)
 
-                if (x + y) % 2 == 0:
-                    color = Config.LIGHT_COLOR
-                else:
-                    color = Config.DARK_COLOR
-
-                pygame.draw.rect(self.screen, color, rect)
-
-    def draw_text_center(self, text: str, y: int, color: tuple[int, int, int]) -> None:
+    def _draw_text_center(self, text: str, y: int, color: tuple[int, int, int]) -> None:
         outline_color = (0, 0, 0)
 
-        base = self.font.render(text, True, color)
-        outline = self.font.render(text, True, outline_color)
+        base = self._font.render(text, True, color)
+        outline = self._font.render(text, True, outline_color)
 
         rect = base.get_rect(center=(Config.WINDOW_WIDTH // 2, y))
 
         for dx in [-2, 2]:
-             for dy in [-2, 2]:
-                 self.screen.blit(outline, (rect.x + dx, rect.y + dy))
+            for dy in [-2, 2]:
+                self._screen.blit(outline, (rect.x + dx, rect.y + dy))
 
-             self.screen.blit(base, rect)
+        self._screen.blit(base, rect)
 
-    def handle_events(self) -> None:
+    def _handle_events(self) -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.running = False
+                self._running = False
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    self.running = False
+                    self._running = False
 
-                elif self.game_over and event.key == pygame.K_r:
+                elif self._game_over and event.key == pygame.K_r:
                     self.restart()
 
-                elif not self.game_over:
-                  if event.key in (pygame.K_UP, pygame.K_w):
-                     self.snake.set_direction((0, -1))
+                elif not self._game_over:
+                    if event.key in (pygame.K_UP, pygame.K_w):
+                        self._snake.set_direction((0, -1))
 
-                  elif event.key in (pygame.K_DOWN, pygame.K_s):
-                     self.snake.set_direction((0, 1))
+                    elif event.key in (pygame.K_DOWN, pygame.K_s):
+                        self._snake.set_direction((0, 1))
 
-                  elif event.key in (pygame.K_LEFT, pygame.K_a):
-                     self.snake.set_direction((-1, 0))
+                    elif event.key in (pygame.K_LEFT, pygame.K_a):
+                        self._snake.set_direction((-1, 0))
 
-                  elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                      self.snake.set_direction((1, 0))
+                    elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                        self._snake.set_direction((1, 0))
 
-    def update(self) -> None:
-        if self.game_over:
+    def _update(self) -> None:
+        if self._game_over:
             return
 
-        self.snake.move()
+        self._snake.move()
 
-        if self.snake.collides_with_wall() or self.snake.collides_with_self():
-            self.game_over = True
-            self.high_score_manager.update_if_better(self.score)
+        if self._snake.collides_with_wall() or self._snake.collides_with_self():
+            self._game_over = True
+            self._high_score_manager.update_if_better(self._score)
             return
 
-        if self.snake.head == self.food.position:
-            self.score += 1
-            self.snake.grow()
-            self.food = self.create_food()
-            self.high_score_manager.update_if_better(self.score)
+        if self._snake.head == self._food.position:
+            self._score += 1
+            self._snake.grow()
+            self._food = FoodFactory.create_food(self._snake.body)
+            self._high_score_manager.update_if_better(self._score)
 
-    def draw_score(self) -> None:
-        score_text = self.font.render(f"Score: {self.score}", True, Config.TEXT_COLOR)
-        high_score_text = self.font.render(
-            f"Best: {self.high_score_manager.high_score}",
-            True,
-            Config.TEXT_COLOR,
-        )
-        self.screen.blit(score_text, (10, 10))
-        self.screen.blit(high_score_text, (10, 40))
+    def _draw(self) -> None:
+        self._draw_grid()
 
-    def draw(self) -> None:
-        self.draw_grid()
-        self.snake.draw(self.screen)
-        self.food.draw(self.screen)
-        self.draw_score()
+        drawables: List[GameObject] = [self._food, self._snake]
+        for obj in drawables:
+            obj.draw(self._screen)
 
-        if self.game_over:
-            self.draw_text_center("GAME OVER", Config.WINDOW_HEIGHT // 2 - 40, Config.GAME_OVER_COLOR)
-            self.draw_text_center("Press R to restart", Config.WINDOW_HEIGHT // 2, Config.TEXT_COLOR)
-            self.draw_text_center("Press ESC to quit", Config.WINDOW_HEIGHT // 2 + 40, Config.TEXT_COLOR)
+        self._scoreboard.draw(self._screen, self._score)
+
+        if self._game_over:
+            self._draw_text_center(
+                "GAME OVER",
+                Config.WINDOW_HEIGHT // 2 - 40,
+                Config.GAME_OVER_COLOR,
+            )
+            self._draw_text_center(
+                "Press R to restart",
+                Config.WINDOW_HEIGHT // 2,
+                Config.TEXT_COLOR,
+            )
+            self._draw_text_center(
+                "Press ESC to quit",
+                Config.WINDOW_HEIGHT // 2 + 40,
+                Config.TEXT_COLOR,
+            )
 
         pygame.display.flip()
 
     def run(self) -> None:
-        while self.running:
-            self.handle_events()
-            self.update()
-            self.draw()
-            self.clock.tick(Config.FPS)
+        while self._running:
+            self._handle_events()
+            self._update()
+            self._draw()
+            self._clock.tick(Config.FPS)
 
         pygame.quit()
         sys.exit()
+
 
 def main() -> None:
     game = SnakeGame()
